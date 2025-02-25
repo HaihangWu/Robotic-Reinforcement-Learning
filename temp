@@ -1,0 +1,45 @@
+
+
+# Initial positions based on the manipulator's XML
+base_pos = np.array([0, 0, 0])
+link1_pos = base_pos + np.array([0, 0, 0.1])
+link2_pos = link1_pos + np.array([0, 0, 0.2])
+end_effector_pos = link2_pos + np.array([0, 0, 0.2])
+
+# Define the string and ball position
+string_length = 0.2  # Adjust based on your model
+ball_pos = end_effector_pos + np.array([0, 0, -string_length])  # Ball below the end effector
+
+# Plotting
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot base
+ax.scatter(*base_pos, color='black', s=100, label='Base')
+
+# Plot links
+ax.plot([base_pos[0], link1_pos[0]], [base_pos[1], link1_pos[1]], [base_pos[2], link1_pos[2]], color='red', linewidth=5, label='Link 1')
+ax.plot([link1_pos[0], link2_pos[0]], [link1_pos[1], link2_pos[1]], [link1_pos[2], link2_pos[2]], color='blue', linewidth=5, label='Link 2')
+
+# Plot end effector
+ax.scatter(*end_effector_pos, color='gray', s=50, label='End Effector')
+
+# Plot string
+ax.plot([end_effector_pos[0], ball_pos[0]], [end_effector_pos[1], ball_pos[1]], [end_effector_pos[2], ball_pos[2]], color='green', linestyle='--', label='String')
+
+# Plot ball
+ax.scatter(*ball_pos, color='orange', s=100, label='Ball')
+
+# Labels and legend
+ax.set_xlabel('X-axis')
+ax.set_ylabel('Y-axis')
+ax.set_zlabel('Z-axis')
+ax.set_title('Initial Position of the Robot Manipulator')
+ax.legend()
+
+# Set limits
+ax.set_xlim([-0.1, 0.1])
+ax.set_ylim([-0.1, 0.1])
+ax.set_zlim([-0.1, 0.5])
+
+plt.show()
