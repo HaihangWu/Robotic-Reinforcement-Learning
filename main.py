@@ -2,11 +2,17 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
-import mujoco
 import matplotlib
 matplotlib.use('TkAgg')  # Use TkAgg backend
 import matplotlib.pyplot as plt
 import os
+import mujoco
+
+# import sys
+# if sys.version_info[0] == 3:
+#     import tkinter as tk
+# else:
+#     import Tkinter as tk
 
 # Define simulation parameters
 STRING_LENGTH = 0.1  # meters
