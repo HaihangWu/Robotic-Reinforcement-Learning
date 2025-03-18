@@ -49,7 +49,7 @@ class ManipulatorEnv(gym.Env):
         # Forward kinematics to determine end effector position
         x = link1_length * np.cos(joint_angles[0]) + link2_length * np.cos(joint_angles[0] + joint_angles[1])
         y = link1_length * np.sin(joint_angles[0]) + link2_length * np.sin(joint_angles[0] + joint_angles[1])
-        z = 0.1  # Assuming base height
+        z = 0.0  # Assuming base height
 
         return np.array([x, y, z])
 
@@ -117,7 +117,7 @@ def visualize_initial_positions(initial_position, string_length,trajectory):
     ax.scatter(initial_position[0], initial_position[1], initial_position[2], color='k', s=100, label='Base')
 
     # Link 1 position
-    link1_end = np.array(initial_position) + np.array([0, 0, 0.1])  # Height of link 1
+    link1_end = np.array(initial_position) + np.array([0, 0, 0.2])  # Height of link 1
     ax.plot([initial_position[0], link1_end[0]],
             [initial_position[1], link1_end[1]],
             [initial_position[2], link1_end[2]], color='b', linewidth=5, label='Link 1')
@@ -129,7 +129,7 @@ def visualize_initial_positions(initial_position, string_length,trajectory):
             [link1_end[2], link2_end[2]], color='g', linewidth=5, label='Link 2')
 
     # End effector position
-    end_effector_pos = link2_end + np.array([0, 0, 0.2])  # Assuming end effector extends from link 2
+    end_effector_pos = link2_end + np.array([0, 0, 0.0])
     ax.scatter(end_effector_pos[0], end_effector_pos[1], end_effector_pos[2], color='r', s=100, label='End Effector')
 
     # Ball position
@@ -162,7 +162,7 @@ def visualize_initial_positions(initial_position, string_length,trajectory):
 num_steps = 250
 time_steps = np.linspace(0, 1, num_steps)
 
-start_point = np.array([0.01, 0.01, 0.2])  # Initial position of the ball
+start_point = np.array([0.0, 0.0, 0.5])  # Initial position of the ball
 end_point = np.array([0.05, 0.05, 0.3])  # Final position
 
 # Interpolate between start and end points
