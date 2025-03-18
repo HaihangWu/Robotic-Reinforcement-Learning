@@ -175,7 +175,8 @@ trajectory = np.outer(time_steps, (end_point - start_point)) + start_point
 visualize_initial_positions(initial_position=[0, 0, 0.2], string_length=STRING_LENGTH,trajectory=trajectory)
 
 # Train the RL policy
-model_path = r"C:\Users\hthh1\PycharmProjects\pythonProject\manipulator.xml"
+#model_path = r"C:\Users\hthh1\PycharmProjects\pythonProject\manipulator.xml"
+model_path = r"/Users/haihangw/PycharmProjects/Robotic-Reinforcement-Learning/manipulator.xml"
 env = ManipulatorEnv(trajectory, model_path)
 env = ManipulatorEnv(trajectory, model_path)
 model = PPO("MlpPolicy", env, verbose=1)
