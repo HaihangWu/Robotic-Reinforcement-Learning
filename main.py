@@ -43,13 +43,14 @@ class ManipulatorEnv(gym.Env):
         # Extract joint angles from the model (assumed initial positions)
         joint_angles = self.data.qpos[:2]  # Assuming the first two joints are relevant
         # Calculate the position of the end effector based on the joint angles
+        base_height=0.2
         link1_length = 0.2  # Height of link 1
         link2_length = 0.2  # Height of link 2
 
         # Forward kinematics to determine end effector position
         x = link1_length * np.cos(joint_angles[0]) + link2_length * np.cos(joint_angles[0] + joint_angles[1])
         y = link1_length * np.sin(joint_angles[0]) + link2_length * np.sin(joint_angles[0] + joint_angles[1])
-        z = 0.0  # Assuming base height
+        z = base_height+link1_length+link2_length # Assuming base height
 
         return np.array([x, y, z])
 
