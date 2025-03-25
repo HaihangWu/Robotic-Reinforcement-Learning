@@ -48,8 +48,8 @@ class ManipulatorEnv(gym.Env):
         link2_length = 0.2  # Height of link 2
 
         # Forward kinematics to determine end effector position
-        x = link1_length * np.cos(joint_angles[0]) + link2_length * np.cos(joint_angles[0] + joint_angles[1])
-        y = link1_length * np.sin(joint_angles[0]) + link2_length * np.sin(joint_angles[0] + joint_angles[1])
+        x =0.0 #link1_length * np.cos(joint_angles[0]) + link2_length * np.cos(joint_angles[0] + joint_angles[1])
+        y =0.0 #link1_length * np.sin(joint_angles[0]) + link2_length * np.sin(joint_angles[0] + joint_angles[1])
         z = base_height+link1_length+link2_length # Assuming base height
 
         return np.array([x, y, z])
@@ -104,7 +104,8 @@ class ManipulatorEnv(gym.Env):
         self.data.qpos[:2] = np.array([0, 0])  # Reset to zero angles for example
         self.initial_position = self.calculate_initial_position()
         self.ball_pos = self.initial_position + np.array([0, 0, -STRING_LENGTH])  # Initialize ball position
-        return np.zeros(9), {}
+        return np.concatenate([self.ball_pos, [0,0,0.6], [0.0, 0.0, 0.5]]), {}
+
 
     def render(self, mode='human'):
         mujoco.mj_render(self.model, self.data)
@@ -170,8 +171,6 @@ end_point = np.array([0.05, 0.05, 0.3])  # Final position
 trajectory = np.outer(time_steps, (end_point - start_point)) + start_point
 
 
-
-
 # Call the visualization function before training
 visualize_initial_positions(initial_position=[0, 0, 0.2], string_length=STRING_LENGTH,trajectory=trajectory)
 
@@ -187,7 +186,8 @@ model.learn(total_timesteps=10000)
 obs, _ = env.reset()
 positions = []
 for _ in range(len(trajectory)):
-    action, _ = model.predict(obs, deterministic=True)
+    print('current is:', obs[:3],'target is:',obs[6:9], 'end effector is:',obs[3:6])
+    action, _ = model.predict(obs, deterministic=True) #obs = np.concatenate([self.ball_pos, end_effector_pos, target_pos])
     obs, _, done, _, _ = env.step(action)
     positions.append(obs[:3])  # Track ball positions
     if done:
