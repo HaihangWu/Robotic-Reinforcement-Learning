@@ -19,7 +19,8 @@ STRING_LENGTH = 0.1  # meters
 BALL_WEIGHT = 0.2  # kg
 GRAVITY = 9.81  # m/s^2
 SIMULATION_TIMESTEP = 1 / 50  # 50 Hz
-
+bTheta = 0.1 # Damping Oscillation
+bPhi = 0 # Damping Rotation
 
 # Create environment for RL training
 class ManipulatorEnv(gym.Env):
@@ -78,12 +79,14 @@ class ManipulatorEnv(gym.Env):
 
         # Compute trajectory error
         target_pos = self.trajectory[self.current_step]
-        error = np.linalg.norm(np.array(self.ball_pos) - np.array(target_pos))
+        #error = np.linalg.norm(np.array(self.ball_pos) - np.array(target_pos))
+        error = np.linalg.norm(end_effector_pos- np.array(target_pos))
         reward = -error
 
         self.current_step += 1
         done = self.current_step >= len(self.trajectory)
-        obs = np.concatenate([self.ball_pos, end_effector_pos, target_pos])
+        #obs = np.concatenate([self.ball_pos, end_effector_pos, target_pos])
+        obs = np.concatenate([end_effector_pos, target_pos])
 
         return obs, reward, done, {}, {}
 
@@ -94,6 +97,30 @@ class ManipulatorEnv(gym.Env):
             # If the distance exceeds the string length, it means tension is acting
             return (STRING_LENGTH / distance_to_ball)  # This is a simplification
         return 1.0  # Full tension if within length
+
+    def f(t, state, i): #i?
+
+        alpha = state[0]  # Oscillation velocity
+        theta = state[1]  # Vertical angle
+        beta = 0  # Rotational velocity (ignored for now)
+        phi = state[3]  # Azimuth angle
+
+        gamma_dot = xPivot(i)[1] #end effector position?
+        delta_dot = zPivot(i)[1]
+
+        alpha_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2)) * ( # l is the length of the string ?
+                    -GRAVITY * STRING_LENGTH * BALL_WEIGHT * np.sin(theta) + 0.5 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.sin(2 * theta) * pow(beta,
+                                                                                               2) - bTheta * alpha - STRING_LENGTH * BALL_WEIGHT * np.cos(
+                phi) * np.cos(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(theta) * np.sin(phi) * delta_dot)
+        theta_dot = alpha
+
+        beta_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2) * pow(np.sin(theta), 2)) * (
+                    -bPhi * beta - 2 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.cos(theta) * np.sin(theta) * beta * alpha + STRING_LENGTH * BALL_WEIGHT * np.sin(
+                phi) * np.sin(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(phi) * np.sin(theta) * delta_dot)
+        phi_dot = beta
+
+        # return the first order derivatives
+        return np.array([alpha_dot, theta_dot, beta_dot, phi_dot])
 
 
     def reset(self, seed=None, options=None):
@@ -165,7 +192,7 @@ num_steps = 250
 time_steps = np.linspace(0, 1, num_steps)
 
 start_point = np.array([0.0, 0.0, 0.5])  # Initial position of the ball
-end_point = np.array([0.05, 0.05, 0.3])  # Final position
+end_point = np.array([0.1, 0.0, 0.3])  # Final position
 
 # Interpolate between start and end points
 trajectory = np.outer(time_steps, (end_point - start_point)) + start_point
@@ -178,7 +205,6 @@ visualize_initial_positions(initial_position=[0, 0, 0.2], string_length=STRING_L
 #model_path = r"C:\Users\hthh1\PycharmProjects\pythonProject\manipulator.xml"
 model_path = r"/Users/haihangw/PycharmProjects/Robotic-Reinforcement-Learning/manipulator.xml"
 env = ManipulatorEnv(trajectory, model_path)
-env = ManipulatorEnv(trajectory, model_path)
 model = PPO("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=10000)
 
@@ -186,14 +212,15 @@ model.learn(total_timesteps=10000)
 obs, _ = env.reset()
 positions = []
 for _ in range(len(trajectory)):
-    print('current is:', obs[:3],'target is:',obs[6:9], 'end effector is:',obs[3:6])
+    #print('current is:', obs[:3],'target is:',obs[6:9], 'end effector is:',obs[3:6])
+    print('end effector  is:', obs[:3], 'target is:', obs[3:6])
     action, _ = model.predict(obs, deterministic=True) #obs = np.concatenate([self.ball_pos, end_effector_pos, target_pos])
     obs, _, done, _, _ = env.step(action)
     positions.append(obs[:3])  # Track ball positions
     if done:
         break
 
-# Visualization of the trajectory
+# Visualization of the trajectoryko
 positions = np.array(positions)
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
