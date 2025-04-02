@@ -35,6 +35,7 @@ class ManipulatorEnv(gym.Env):
         # Load MuJoCo model
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.data = mujoco.MjData(self.model)
+        print(self.data)
 
         # Initialize the end effector's position based on the initial joint angles
         self.initial_position = self.calculate_initial_position()
@@ -98,30 +99,6 @@ class ManipulatorEnv(gym.Env):
             return (STRING_LENGTH / distance_to_ball)  # This is a simplification
         return 1.0  # Full tension if within length
 
-    def f(t, state, i): #i?
-
-        alpha = state[0]  # Oscillation velocity
-        theta = state[1]  # Vertical angle
-        beta = 0  # Rotational velocity (ignored for now)
-        phi = state[3]  # Azimuth angle
-
-        gamma_dot = xPivot(i)[1] #end effector position?
-        delta_dot = zPivot(i)[1]
-
-        alpha_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2)) * ( # l is the length of the string ?
-                    -GRAVITY * STRING_LENGTH * BALL_WEIGHT * np.sin(theta) + 0.5 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.sin(2 * theta) * pow(beta,
-                                                                                               2) - bTheta * alpha - STRING_LENGTH * BALL_WEIGHT * np.cos(
-                phi) * np.cos(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(theta) * np.sin(phi) * delta_dot)
-        theta_dot = alpha
-
-        beta_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2) * pow(np.sin(theta), 2)) * (
-                    -bPhi * beta - 2 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.cos(theta) * np.sin(theta) * beta * alpha + STRING_LENGTH * BALL_WEIGHT * np.sin(
-                phi) * np.sin(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(phi) * np.sin(theta) * delta_dot)
-        phi_dot = beta
-
-        # return the first order derivatives
-        return np.array([alpha_dot, theta_dot, beta_dot, phi_dot])
-
 
     def reset(self, seed=None, options=None):
         self.current_step = 0
@@ -131,7 +108,8 @@ class ManipulatorEnv(gym.Env):
         self.data.qpos[:2] = np.array([0, 0])  # Reset to zero angles for example
         self.initial_position = self.calculate_initial_position()
         self.ball_pos = self.initial_position + np.array([0, 0, -STRING_LENGTH])  # Initialize ball position
-        return np.concatenate([self.ball_pos, [0,0,0.6], [0.0, 0.0, 0.5]]), {}
+        #return np.concatenate([self.ball_pos, [0,0,0.6], [0.0, 0.0, 0.5]]), {}
+        return np.concatenate([[0, 0, 0.6], [0.0, 0.0, 0.6]]), {}
 
 
     def render(self, mode='human'):
@@ -199,7 +177,7 @@ trajectory = np.outer(time_steps, (end_point - start_point)) + start_point
 
 
 # Call the visualization function before training
-visualize_initial_positions(initial_position=[0, 0, 0.2], string_length=STRING_LENGTH,trajectory=trajectory)
+#visualize_initial_positions(initial_position=[0, 0, 0.2], string_length=STRING_LENGTH,trajectory=trajectory)
 
 # Train the RL policy
 #model_path = r"C:\Users\hthh1\PycharmProjects\pythonProject\manipulator.xml"
@@ -228,3 +206,30 @@ ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2], 'r--', label='Desi
 ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], 'b-', label='Tracked Trajectory')
 ax.legend()
 plt.show()
+
+
+# def f(t, state, i):  # i?
+#
+#     alpha = state[0]  # Oscillation velocity
+#     theta = state[1]  # Vertical angle
+#     beta = 0  # Rotational velocity (ignored for now)
+#     phi = state[3]  # Azimuth angle
+#
+#     gamma_dot = xPivot(i)[1]  # end effector position?
+#     delta_dot = zPivot(i)[1]
+#
+#     alpha_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2)) * (  # l is the length of the string ?
+#             -GRAVITY * STRING_LENGTH * BALL_WEIGHT * np.sin(theta) + 0.5 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.sin(
+#         2 * theta) * pow(beta,
+#                          2) - bTheta * alpha - STRING_LENGTH * BALL_WEIGHT * np.cos(
+#         phi) * np.cos(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(theta) * np.sin(phi) * delta_dot)
+#     theta_dot = alpha
+#
+#     beta_dot = 1 / (BALL_WEIGHT * pow(STRING_LENGTH, 2) * pow(np.sin(theta), 2)) * (
+#             -bPhi * beta - 2 * pow(STRING_LENGTH, 2) * BALL_WEIGHT * np.cos(theta) * np.sin(
+#         theta) * beta * alpha + STRING_LENGTH * BALL_WEIGHT * np.sin(
+#         phi) * np.sin(theta) * gamma_dot + STRING_LENGTH * BALL_WEIGHT * np.cos(phi) * np.sin(theta) * delta_dot)
+#     phi_dot = beta
+#
+#     # return the first order derivatives
+#     return np.array([alpha_dot, theta_dot, beta_dot, phi_dot])
