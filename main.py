@@ -22,7 +22,7 @@ SIMULATION_TIMESTEP = 1 / 50  # 50 Hz
 bTheta = 0.1 # Damping Oscillation
 bPhi = 0 # Damping Rotation
 
-# Create environment for RL training
+# Create environment for RL training.
 class ManipulatorEnv(gym.Env):
     def __init__(self, trajectory, model_path):
         super(ManipulatorEnv, self).__init__()
