@@ -9,7 +9,6 @@ import mujoco
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import copy
 
 # Constants
 STRING_LENGTH = 0.1
@@ -63,7 +62,6 @@ class ManipulatorEnv(gym.Env):
     def reset(self, seed=None, options=None):
         self.current_step = 0
         self.model.opt.gravity = np.zeros(3)
-        self.data = mujoco.MjData(self.model)
         mujoco.mj_resetData(self.model, self.data)
         self.data.qpos[:2] = 0
         self.initial_position = self.calculate_initial_position()
@@ -71,74 +69,91 @@ class ManipulatorEnv(gym.Env):
         return np.concatenate([[0.0, 0.0, 0.6], [0.0, 0.0, 0.6]]), {}
 
 
-class PolicyNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim):
+class ActorCritic(nn.Module):
+    def __init__(self, input_dim, action_dim):
         super().__init__()
-        self.fc = nn.Sequential(
+        self.shared = nn.Sequential(
             nn.Linear(input_dim, 64),
             nn.ReLU(),
+        )
+        self.actor = nn.Sequential(
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, output_dim),
+            nn.Linear(64, action_dim),
             nn.Tanh()
+        )
+        self.critic = nn.Sequential(
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
         )
 
     def forward(self, x):
-        return self.fc(x)
+        x = self.shared(x)
+        return self.actor(x), self.critic(x)
 
-def reset_policy_weights(policy):
-    def weight_reset(m):
-        if isinstance(m, (torch.nn.Linear, torch.nn.Conv2d)):
-            m.reset_parameters()
-    policy.apply(weight_reset)
+def compute_gae(rewards, values, masks, gamma=0.99, lam=0.95):
+    values = values + [0]
+    gae, returns = 0, []
+    for i in reversed(range(len(rewards))):
+        delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
+        gae = delta + gamma * lam * masks[i] * gae
+        returns.insert(0, gae + values[i])
+    return returns
 
-# REINFORCE Algorithm
-def train(env, policy, episodes=1000, gamma=0.99):
-    # Decrease exploration noise gradually
-    exploration_decay = 0.995
-    exploration_std = 0.5
-    policy_attempt = PolicyNetwork(input_dim=6, output_dim=2)
-    optimizer_attempt = optim.Adam(policy_attempt.parameters(), lr=1e-3)
+def ppo_update(policy, optimizer, observations, actions, log_probs_old, returns, advantages, clip_epsilon=0.2, epochs=10, batch_size=64):
+    dataset = torch.utils.data.TensorDataset(observations, actions, log_probs_old, returns, advantages)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    best_Total_Reward=-1000000
-    final_log_probs, final_returns = [], []
-    sampling_attempts=5
+    for _ in range(epochs):
+        for obs_batch, act_batch, logp_old_batch, ret_batch, adv_batch in loader:
+            pi, value = policy(obs_batch)
+            dist = torch.distributions.Normal(pi, 0.1)
+            logp = dist.log_prob(act_batch).sum(axis=-1)
+            ratio = torch.exp(logp - logp_old_batch)
+
+            surr1 = ratio * adv_batch
+            surr2 = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon) * adv_batch
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = (ret_batch - value.squeeze()).pow(2).mean()
+
+            optimizer.zero_grad()
+            (policy_loss + 0.5 * value_loss).backward()
+            optimizer.step()
+
+def train_ppo(env, policy, optimizer, episodes=1000, gamma=0.99, lam=0.95):
     for episode in range(episodes):
-        #exploration_std *= exploration_decay  # Reduce std dev over time
         obs, _ = env.reset()
-        if best_Total_Reward<-15: # avoid bad model initialization
-           reset_policy_weights(policy_attempt)
-        log_probs, rewards = [], []
+        log_probs, values, rewards, masks, actions, states = [], [], [], [], [], []
+
         done = False
         while not done:
             obs_tensor = torch.tensor(obs, dtype=torch.float32)
-            action_probs = policy_attempt(obs_tensor)
-            dist = torch.distributions.Normal(action_probs, torch.ones_like(action_probs) * 0.5)
+            states.append(obs_tensor)
+            action_mean, value = policy(obs_tensor)
+            dist = torch.distributions.Normal(action_mean, 0.1)
             action = dist.sample()
             log_prob = dist.log_prob(action).sum()
+
             obs, reward, done, _, _ = env.step(action.detach().numpy())
+            actions.append(action)
             log_probs.append(log_prob)
+            values.append(value.item())
             rewards.append(reward)
+            masks.append(1 - float(done))
 
-        Current_total_reward=sum(rewards)
-        if Current_total_reward>best_Total_Reward: # avoid to use the bad trajectory to  update the model
-            print(f"Episode {episode}, total reward: {sum(rewards):.2f}")
-            best_Total_Reward=Current_total_reward
-            final_returns = [sum(gamma**t * r for t, r in enumerate(rewards[i:])) for i in range(len(rewards))]
-            final_returns = torch.tensor(final_returns, dtype=torch.float32)
-            final_log_probs=log_probs
+        returns = compute_gae(rewards, values, masks, gamma, lam)
+        advantages = torch.tensor(returns, dtype=torch.float32) - torch.tensor(values, dtype=torch.float32)
 
-            optimizer_attempt.zero_grad()
-            loss = -torch.stack(final_log_probs) @ final_returns
-            loss.backward()
-            optimizer_attempt.step()
+        observations = torch.stack(states)
+        actions = torch.stack(actions)
+        log_probs_old = torch.stack(log_probs)
+        returns = torch.tensor(returns, dtype=torch.float32)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-            policy = copy.deepcopy(policy_attempt)  # Save best model
+        ppo_update(policy, optimizer, observations, actions, log_probs_old, returns, advantages)
 
-
-
-    return policy
-
+        print(f"Episode {episode}, total reward: {sum(rewards):.2f}")
 
 
 # Trajectory definition
@@ -151,14 +166,14 @@ trajectory = np.outer(time_steps, (end - start)) + start
 # Setup
 model_path = r"D:\research projects\Robotic-Reinforcement-Learning\manipulator.xml"
 env = ManipulatorEnv(trajectory, model_path)
-policy_net = PolicyNetwork(input_dim=6, output_dim=2)
+policy_net = ActorCritic(input_dim=6, output_dim=2)
 # for name, param in policy_net.named_parameters():
 #     if param.requires_grad:
 #         print(name)
-#optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
+optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
 
 # Train
-policy_net=train(env, policy_net, episodes=50)
+train_ppo(env, policy_net, optimizer, episodes=100)
 
 # Evaluate
 obs, _ = env.reset()
@@ -181,44 +196,3 @@ ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2], 'r--', label='Targ
 ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], 'b-', label='Tracked')
 ax.legend()
 plt.show()
-
-
-
-# def train(env, policy, optimizer, episodes=1000, gamma=0.99):
-#     # Decrease exploration noise gradually
-#     exploration_decay = 0.995
-#     exploration_std = 0.5
-#     Old_Total_Reward=-1000000
-#     sampling_attempts=5
-#     for episode in range(episodes):
-#         exploration_std *= exploration_decay  # Reduce std dev over time
-#         obs, _ = env.reset()
-#         log_probs, rewards = [], []
-#         done = False
-#         while not done:
-#             obs_tensor = torch.tensor(obs, dtype=torch.float32)
-#             action_probs = policy(obs_tensor)
-#             dist = torch.distributions.Normal(action_probs, torch.ones_like(action_probs) * 0.1)
-#             action = dist.sample()
-#             log_prob = dist.log_prob(action).sum()
-#             obs, reward, done, _, _ = env.step(action.detach().numpy())
-#             log_probs.append(log_prob)
-#             rewards.append(reward)
-#
-#         Current_total_reward=sum(rewards)
-#         optimizer.zero_grad()
-#         if Current_total_reward>Old_Total_Reward:
-#             print(f"Episode {episode}, total reward: {sum(rewards):.2f}")
-#             Old_Total_Reward=Current_total_reward
-#             returns = [sum(gamma**t * r for t, r in enumerate(rewards[i:])) for i in range(len(rewards))]
-#             returns = torch.tensor(returns, dtype=torch.float32)
-#             #returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-#             #returns = torch.tensor(returns, dtype=torch.float32)
-#             loss = -torch.stack(log_probs) @ returns
-#             loss.backward()
-#             optimizer.step()
-
-# manipulator test
-# for step in range(20):
-# returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-# returns = torch.tensor(returns, dtype=torch.float32)
